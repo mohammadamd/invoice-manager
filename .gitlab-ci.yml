@@ -1,0 +1,70 @@
+stages:
+  - prepare
+  - test
+  - build
+
+prepare:
+  image: php:8.1-cli-alpine
+  stage: prepare
+  variables:
+    COMPOSER_HOME: '.composer'
+    COMPOSER_PROCESS_TIMEOUT: 900
+  script:
+    - composer install --no-interaction --no-suggest --no-progress
+  cache:
+    key: composer
+    paths:
+      - .composer/
+      - vendor/
+  only:
+    - branches
+    - tags
+    - merge_requests
+
+test:
+  image: registry.snapp.tech/docker/php:8.1-cli-alpine
+  stage: test
+  variables:
+    MYSQL_DATABASE: 'default'
+    MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+    APP_ENV: 'testing'
+    APP_DEBUG: 'true'
+    DB_HOST: 'db'
+    DB_DATABASE: 'default'
+    DB_USERNAME: 'root'
+    DB_PASSWORD: ''
+  services:
+    - name: mariadb:10.2.14
+      alias: db
+  before_script:
+    - apk --update --no-cache add bash coreutils
+    - php ./artisan migrate
+    - php ./artisan key:generate
+    - php ./artisan db:seed --class ArchiveSeeder
+  script:
+    -  php -d memory_limit=2G vendor/bin/phpunit
+  cache:
+    key: composer
+    paths:
+      - .composer/
+      - vendor
+    policy: pull
+
+build:
+  image: docker:latest
+  stage: build
+  script:
+    - docker build -t ${CI_PROJECT_NAME}:${CI_COMMIT_REF_SLUG} .
+  after_script:
+    - docker save -o ${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}.tar ${CI_PROJECT_NAME}:${CI_COMMIT_REF_SLUG}
+  artifacts:
+    name: "docker-image-$CI_PROJECT_NAME-$CI_COMMIT_REF_SLUG"
+    paths:
+      - ${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}.tar
+    expire_in: 1 week
+  cache:
+    key: composer
+    paths:
+      - .composer/
+      - vendor
+    policy: pull

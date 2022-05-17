@@ -1,0 +1,13 @@
+version: '3'
+services:
+  mysql:
+    image: mariadb:10.5.8
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'true'
+      MYSQL_DATABASE: 'invoice-manager'
+    ports:
+      - '3306:3306'
+  redis:
+    image: redis
+    ports:
+      -  '6975:6975'
